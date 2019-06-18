@@ -18,8 +18,11 @@ import changeLanguage from 'indico-url:core.change_lang';
 
 import {Translate} from 'indico/react/i18n';
 import {indicoAxios, handleAxiosError} from 'indico/utils/axios';
+import {impersonateUser} from 'indico/modules/core/impersonation';
+import {UserSearch} from './principals/Search';
 
 import './UserMenu.module.scss';
+import {useFavoriteUsers} from '../hooks';
 
 async function postAndReload(selectedLanguage) {
   try {
@@ -31,8 +34,28 @@ async function postAndReload(selectedLanguage) {
   location.reload();
 }
 
-export default function UserMenu({userData, languages}) {
-  if (!userData) {
+function UserImpersonation() {
+  const [favoriteUsers] = useFavoriteUsers();
+
+  return (
+    <UserSearch
+      triggerFactory={({disabled, onClick}) => (
+        <Dropdown.Item onClick={onClick} disabled={disabled}>
+          <Translate>Impersonate user</Translate>
+        </Dropdown.Item>
+      )}
+      existing={[]}
+      onAddItems={({userId}) => impersonateUser(userId)}
+      favorites={favoriteUsers}
+      withExternalUsers={false}
+      single
+      alwaysConfirm
+    />
+  );
+}
+
+export default function UserMenu({userData, languages, hasLoadedConfig, hasLoadedUserInfo}) {
+  if (!userData || !languages || !hasLoadedConfig || !hasLoadedUserInfo) {
     return '';
   }
 
@@ -50,22 +73,26 @@ export default function UserMenu({userData, languages}) {
     </Label>
   );
 
-  const languageSelector = (
-    <Dropdown
-      value={language}
-      selectOnBlur={false}
-      onChange={(_, {value}) => {
-        if (value !== language) {
-          postAndReload(value);
-        }
-      }}
-      options={Object.entries(languages).map(([key, name]) => ({
-        key,
-        text: name,
-        value: key,
-      }))}
-    />
-  );
+  const languageSelector = trigger => {
+    return (
+      <Dropdown
+        floating
+        trigger={trigger}
+        value={language}
+        selectOnBlur={false}
+        onChange={(_, {value}) => {
+          if (value !== language) {
+            postAndReload(value);
+          }
+        }}
+        options={Object.entries(languages).map(([key, [name, territory]]) => ({
+          key,
+          text: territory ? `${name} (${territory})` : name,
+          value: key,
+        }))}
+      />
+    );
+  };
 
   const headerContent = (
     <div>
@@ -75,6 +102,7 @@ export default function UserMenu({userData, languages}) {
     </div>
   );
 
+  const langInfo = languages[language] || [language, null];
   return (
     <Dropdown trigger={avatar} pointing="top right">
       <Dropdown.Menu>
@@ -87,14 +115,20 @@ export default function UserMenu({userData, languages}) {
           <Translate>My Preferences</Translate>
         </Dropdown.Item>
         <Dropdown.Header>
-          <Icon name="globe" />
-          {languageSelector}
+          {languageSelector(
+            <>
+              <Icon name="globe" /> {langInfo[1] ? `${langInfo[0]} (${langInfo[1]})` : langInfo[0]}
+            </>
+          )}
         </Dropdown.Header>
         <Dropdown.Divider />
         {isAdmin && (
-          <Dropdown.Item as="a" href={adminDashboard()}>
-            <Translate>Administration</Translate>
-          </Dropdown.Item>
+          <>
+            <Dropdown.Item as="a" href={adminDashboard()}>
+              <Translate>Administration</Translate>
+            </Dropdown.Item>
+            <UserImpersonation />
+          </>
         )}
         <Dropdown.Item as="a" href={authLogout()}>
           <Translate>Logout</Translate>
@@ -114,4 +148,6 @@ UserMenu.propTypes = {
     avatarBgColor: PropTypes.string,
   }).isRequired,
   languages: PropTypes.object.isRequired,
+  hasLoadedConfig: PropTypes.bool.isRequired,
+  hasLoadedUserInfo: PropTypes.bool.isRequired,
 };

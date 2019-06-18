@@ -223,6 +223,11 @@ def set_best_lang(check_session=True):
         # fall back to server default
         resolved_lang = config.DEFAULT_LOCALE
 
+    # normalize to xx_YY capitalization
+    resolved_lang = re.sub(r'^([a-zA-Z]+)_([a-zA-Z]+)$',
+                           lambda m: '{}_{}'.format(m.group(1).lower(), m.group(2).upper()),
+                           resolved_lang)
+
     # As soon as we looked up a language, cache it during the request.
     # This will be returned when accessing `session.lang` since there's code
     # which reads the language from there and might fail (e.g. by returning
@@ -243,7 +248,7 @@ def get_all_locales():
     if babel.app is None:
         return {}
     else:
-        return {str(t): t.language_name.title() for t in babel.list_translations()}
+        return {str(t): (t.language_name.title(), t.territory_name) for t in babel.list_translations()}
 
 
 def set_session_lang(lang):
